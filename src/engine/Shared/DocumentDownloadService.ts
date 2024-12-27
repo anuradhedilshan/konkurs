@@ -50,8 +50,8 @@ class DocumentDownloadService {
 
   constructor(
     {
-      maxConcurrentDownloads = 20,
-      downloadTimeout = 10000,
+      maxConcurrentDownloads = 50,
+      downloadTimeout = 5000,
       downloadPath = path.resolve("./downloads"),
       allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES,
     }: DocumentDownloadOptions = {},
@@ -87,7 +87,6 @@ class DocumentDownloadService {
   }
 
   private generateFileName(id: string, mimeType: string): string {
-
     const extension = mime.extension(mimeType) || "bin";
     this.logger?.log(`Generated file name for ${id}: ${id}.${extension}`);
     return `${id}.${extension}`;
@@ -162,7 +161,7 @@ class DocumentDownloadService {
       } else {
         this.logger?.error(`Download failed for ${request.url}: Unknown error`);
       }
-      console.error(`Download failed for ${request.url}:`, error);
+      console.error(`Download failed for ${request.url}:`);
 
       return {
         id: request.id,

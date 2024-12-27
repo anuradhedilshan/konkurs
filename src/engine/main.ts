@@ -10,6 +10,26 @@ import {
   sleep,
 } from "./utils";
 import { CSVWriter } from "./CsvWriter";
+import axios from "axios";
+import axiosRetry from "axios-retry";
+
+// Configure axios-retry
+axiosRetry(axios, {
+  retries: 2,
+  retryCondition: (error) => {
+    // Extract the URL from the error config
+    const url = error.config?.url;
+    console.log("Retrying", url);
+    
+    if (url && url.startsWith("https://www.konkurs.ro/")) {
+      return true;
+    }
+
+    // Do not retry for other URLs
+    return false;
+  },
+  retryDelay: axiosRetry.exponentialDelay, // Optional: Use exponential backoff
+});
 
 let logger: Logger | null = null;
 let f: CB | null = null;
@@ -85,7 +105,7 @@ export default async function start(
       const list = extractTop20Links(DocumentData.data);
       const queue = [];
       let listData: CampaignData[] = [];
-      console.log("List page", p, list);
+     
 
       for (let i = 0; i < list.length; i++) {
         logger?.log(`length : ${list.length} - Current : ${i}`);
