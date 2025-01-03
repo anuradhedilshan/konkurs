@@ -10,26 +10,65 @@ import {
   sleep,
 } from "./utils";
 import { CSVWriter } from "./CsvWriter";
-import axios from "axios";
-import axiosRetry from "axios-retry";
+import axios, { AxiosError, AxiosRequestConfig } from "axios";
+import axiosRetry, { IAxiosRetryConfig } from "axios-retry";
 
-// Configure axios-retry
-axiosRetry(axios, {
-  retries: 2,
-  retryCondition: (error) => {
-    // Extract the URL from the error config
+// Type for DNS error codes
+type DnsErrorCode = "ECONNREFUSED" | "ETIMEDOUT" | "ENOTFOUND" | "EAI_AGAIN";
+
+// DNS resolution errors that should trigger a retry
+const DNS_ERROR_CODES: DnsErrorCode[] = [
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+];
+
+// Configure axios-retry with enhanced retry logic
+const retryConfig: IAxiosRetryConfig = {
+  retries: 5, // Increased from 3 to 5 for DNS issues
+  retryDelay: (retryCount: number, _error: AxiosError): number => {
+    // Start with 1s delay, then exponential backoff with jitter
+    const baseDelay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+    const jitter = Math.random() * 1000;
+    console.log(
+      `Retry attempt ${retryCount + 1}, waiting ${baseDelay + jitter}ms`
+    );
+    return baseDelay + jitter;
+  },
+  retryCondition: (error: AxiosError): boolean => {
     const url = error.config?.url;
-    console.log("Retrying", url);
-    
-    if (url && url.startsWith("https://www.konkurs.ro/")) {
+    const isKonkursUrl = url && url.startsWith("https://www.konkurs.ro/");
+    const isDnsError = error.code
+      ? DNS_ERROR_CODES.includes(error.code as DnsErrorCode)
+      : false;
+
+    // Retry if it's a Konkurs URL and either a DNS error or a network error
+    if (
+      isKonkursUrl &&
+      (isDnsError || axiosRetry.isNetworkOrIdempotentRequestError(error))
+    ) {
+      console.log("Retrying request due to DNS or network error");
       return true;
     }
 
-    // Do not retry for other URLs
     return false;
   },
-  retryDelay: axiosRetry.exponentialDelay, // Optional: Use exponential backoff
-});
+  // Reset timeout between retries
+  shouldResetTimeout: true,
+  // Optional: Called after a retry attempt
+  onRetry: (
+    retryCount: number,
+    error: AxiosError,
+    config: AxiosRequestConfig
+  ): void => {
+    console.log(
+      `Retry ${retryCount} for ${config.url}. Error: ${error.message}`
+    );
+  },
+};
+
+axiosRetry(axios, retryConfig);
 
 let logger: Logger | null = null;
 let f: CB | null = null;
@@ -105,7 +144,6 @@ export default async function start(
       const list = extractTop20Links(DocumentData.data);
       const queue = [];
       let listData: CampaignData[] = [];
-     
 
       for (let i = 0; i < list.length; i++) {
         logger?.log(`length : ${list.length} - Current : ${i}`);

@@ -16042,10 +16042,11 @@ function Get(url2, options = {}) {
     ...DefaultHeaders,
     ...options.headers
   };
+  mergedHeaders["Host"] = "www.konkurs.ro";
   return axios.get(url2, {
     headers: mergedHeaders,
     params: options.params,
-    timeout: options.timeout || 1e4,
+    timeout: options.timeout || 3e4,
     // Default 10 second timeout
     validateStatus: (status) => status >= 200 && status < 300
   });
@@ -58004,7 +58005,7 @@ const SUPPORTED_DOCUMENT_TYPES = [
 class DocumentDownloadService {
   constructor({
     maxConcurrentDownloads = 50,
-    downloadTimeout = 1e4,
+    downloadTimeout = 5e3,
     downloadPath = path$1.resolve("./downloads"),
     allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES
   } = {}, logger2) {
@@ -58562,20 +58563,44 @@ axiosRetry.isNetworkOrIdempotentRequestError = isNetworkOrIdempotentRequestError
 axiosRetry.exponentialDelay = exponentialDelay;
 axiosRetry.linearDelay = linearDelay;
 axiosRetry.isRetryableError = isRetryableError;
-axiosRetry(axios, {
-  retries: 2,
+const DNS_ERROR_CODES = [
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EAI_AGAIN"
+];
+const retryConfig = {
+  retries: 5,
+  // Increased from 3 to 5 for DNS issues
+  retryDelay: (retryCount, _error) => {
+    const baseDelay = Math.min(1e3 * Math.pow(2, retryCount), 1e4);
+    const jitter = Math.random() * 1e3;
+    console.log(
+      `Retry attempt ${retryCount + 1}, waiting ${baseDelay + jitter}ms`
+    );
+    return baseDelay + jitter;
+  },
   retryCondition: (error) => {
     var _a3;
     const url2 = (_a3 = error.config) == null ? void 0 : _a3.url;
-    console.log("Retrying", url2);
-    if (url2 && url2.startsWith("https://www.konkurs.ro/")) {
+    const isKonkursUrl = url2 && url2.startsWith("https://www.konkurs.ro/");
+    const isDnsError = error.code ? DNS_ERROR_CODES.includes(error.code) : false;
+    if (isKonkursUrl && (isDnsError || axiosRetry.isNetworkOrIdempotentRequestError(error))) {
+      console.log("Retrying request due to DNS or network error");
       return true;
     }
     return false;
   },
-  retryDelay: axiosRetry.exponentialDelay
-  // Optional: Use exponential backoff
-});
+  // Reset timeout between retries
+  shouldResetTimeout: true,
+  // Optional: Called after a retry attempt
+  onRetry: (retryCount, error, config) => {
+    console.log(
+      `Retry ${retryCount} for ${config.url}. Error: ${error.message}`
+    );
+  }
+};
+axiosRetry(axios, retryConfig);
 let logger$1 = null;
 let f = null;
 function setLoggerCallback(cb) {
@@ -58607,7 +58632,7 @@ async function start(url2, type, range, location) {
     }
     console.log(type, range);
     logger$1 == null ? void 0 : logger$1.warn(`TYPE: ${type}, start: ${start2}, end: ${end2}`);
-    const downloadService = new DocumentDownloadService(
+    new DocumentDownloadService(
       {
         maxConcurrentDownloads: 10,
         downloadPath: `${location}/regulamente`,
@@ -58627,7 +58652,6 @@ async function start(url2, type, range, location) {
       const list = extractTop20Links(DocumentData2.data);
       const queue = [];
       let listData = [];
-      console.log("List page", p, list);
       for (let i = 0; i < list.length; i++) {
         logger$1 == null ? void 0 : logger$1.log(`length : ${list.length} - Current : ${i}`);
         logger$1 == null ? void 0 : logger$1.log(`Downloading ${list[i]}`);
@@ -58649,18 +58673,6 @@ async function start(url2, type, range, location) {
         url: d.termsAndConditions
       }));
       logger$1 == null ? void 0 : logger$1.log(`Downloading ${documentRequests.length} documents`);
-      try {
-        const results = await downloadService.downloadDocuments(
-          documentRequests
-        );
-        logger$1 == null ? void 0 : logger$1.log(
-          `Downloaded ${results.successful.length} documents successfully, ${results.failed.length} documents failed`
-        );
-      } catch (error) {
-        console.error("Batch download failed:", error);
-        logger$1 == null ? void 0 : logger$1.error("Batch download failed");
-        fireEvent$1("error", error);
-      }
       fireEvent$1("progress", p / end2 * 100);
       Writer.writeData(listData);
       listData = [];
@@ -58759,6 +58771,7 @@ ipcMain.on("start", async (_e, type, location, range, link) => {
   } catch (e) {
     State = false;
     fireEvent("complete", true);
+    console.log(e);
     logger.error(`Error in start "ipcMain.on("start",": ${e}`);
   }
 });

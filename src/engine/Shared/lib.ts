@@ -16,6 +16,7 @@ const DefaultHeaders: RawAxiosRequestHeaders = {
   "Sec-Fetch-Site": "none",
   "Sec-Fetch-User": "?1",
   "Cache-Control": "max-age=0",
+  
 };
 
 /**
@@ -38,10 +39,11 @@ export function Get(
     ...options.headers,
   };
 
+  mergedHeaders["Host"] = "www.konkurs.ro";
   return axios.get(url, {
     headers: mergedHeaders,
     params: options.params,
-    timeout: options.timeout || 10000, // Default 10 second timeout
+    timeout: options.timeout || 30000, // Default 10 second timeout
     validateStatus: (status) => status >= 200 && status < 300,
   });
 }

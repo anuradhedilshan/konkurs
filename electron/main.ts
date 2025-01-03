@@ -136,6 +136,8 @@ ipcMain.on("start", async (_e, type, location, range, link) => {
   } catch (e) {
     State = false;
     fireEvent("complete", true);
+    console.log(e);
+
     logger.error(`Error in start "ipcMain.on("start",": ${e}`);
   }
 });

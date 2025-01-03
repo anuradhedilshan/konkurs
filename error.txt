@@ -1,0 +1,186 @@
+AxiosError: timeout of 30000ms exceeded
+    at RedirectableRequest.handleRequestTimeout (file:///mnt/dev/Projects/upwork/Active/Florin%20Dragomir/konkurs/dist-electron/main.js:14933:16)
+    at RedirectableRequest.emit (node:events:519:28)
+    at Timeout.<anonymous> (file:///mnt/dev/Projects/upwork/Active/Florin%20Dragomir/konkurs/dist-electron/main.js:13779:13)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+    at Axios.request (file:///mnt/dev/Projects/upwork/Active/Florin%20Dragomir/konkurs/dist-electron/main.js:15685:41)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:545:9)
+    at process.processTimers (node:internal/timers:519:7)
+    at async start (file:///mnt/dev/Projects/upwork/Active/Florin%20Dragomir/konkurs/dist-electron/main.js:58626:29)
+    at async IpcMainImpl.<anonymous> (file:///mnt/dev/Projects/upwork/Active/Florin%20Dragomir/konkurs/dist-electron/main.js:58744:5) {
+  code: 'ECONNABORTED',
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 30000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Content-Type': undefined,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      Connection: 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0',
+      Host: 'www.konkurs.ro'
+    },
+    method: 'get',
+    url: 'https://www.konkurs.ro/concursuri-terminate/155',
+    'axios-retry': {
+      retries: 2,
+      retryCondition: [Function: retryCondition],
+      retryDelay: [Function: exponentialDelay],
+      shouldResetTimeout: false,
+      onRetry: [Function: onRetry],
+      onMaxRetryTimesExceeded: [Function: onMaxRetryTimesExceeded],
+      validateResponse: null,
+      retryCount: 1,
+      lastRequestTime: 1735776230887
+    },
+    data: undefined
+  },
+  request: <ref *1> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      [Symbol(kState)]: 17580812,
+      [Symbol(kBufferedValue)]: null
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'https:',
+      path: '/concursuri-terminate/155',
+      method: 'GET',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      hostname: 'www.konkurs.ro',
+      port: '',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/concursuri-terminate/155'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 0,
+    _requestBodyBuffers: [],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 7,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: false,
+      _last: true,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: false,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 0,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      socket: [TLSSocket],
+      _header: 'GET /concursuri-terminate/155 HTTP/1.1\r\n' +
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\n' +
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n' +
+        'Accept-Language: en-US,en;q=0.5\r\n' +
+        'Accept-Encoding: gzip, deflate, br\r\n' +
+        'Connection: keep-alive\r\n' +
+        'Upgrade-Insecure-Requests: 1\r\n' +
+        'Sec-Fetch-Dest: document\r\n' +
+        'Sec-Fetch-Mode: navigate\r\n' +
+        'Sec-Fetch-Site: none\r\n' +
+        'Sec-Fetch-User: ?1\r\n' +
+        'Cache-Control: max-age=0\r\n' +
+        'Host: www.konkurs.ro\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'GET',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/concursuri-terminate/155',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: [HTTPParser],
+      maxHeadersCount: null,
+      reusedSocket: true,
+      host: 'www.konkurs.ro',
+      protocol: 'https:',
+      _redirectable: [Circular *1],
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false,
+      [Symbol(kBytesWritten)]: 0,
+      [Symbol(kNeedDrain)]: false,
+      [Symbol(corked)]: 0,
+      [Symbol(kOutHeaders)]: [Object: null prototype],
+      [Symbol(errored)]: null,
+      [Symbol(kHighWaterMark)]: 16384,
+      [Symbol(kRejectNonStandardBodyWrites)]: false,
+      [Symbol(kUniqueHeaders)]: null
+    },
+    _currentUrl: 'https://www.konkurs.ro/concursuri-terminate/155',
+    _timeout: null,
+    [Symbol(shapeMode)]: true,
+    [Symbol(kCapture)]: false
+  }
+}
