@@ -1,3 +1,4 @@
+import { HttpsAgent } from "agentkeepalive";
 import axios, { AxiosResponse, RawAxiosRequestHeaders } from "axios";
 
 export type ContentType = "articles" | "promotions";
@@ -16,7 +17,6 @@ const DefaultHeaders: RawAxiosRequestHeaders = {
   "Sec-Fetch-Site": "none",
   "Sec-Fetch-User": "?1",
   "Cache-Control": "max-age=0",
-  
 };
 
 /**
@@ -25,6 +25,14 @@ const DefaultHeaders: RawAxiosRequestHeaders = {
  * @param options - Optional configuration for query params, headers, and other axios settings
  * @returns Promise with AxiosResponse
  */
+
+const keepaliveAgent = new HttpsAgent({
+  maxSockets: 100,
+  maxFreeSockets: 10,
+  timeout: 60000, // active socket keepalive for 60 seconds
+  freeSocketTimeout: 30000, // free socket keepalive for 30 seconds
+});
+
 export function Get(
   url: string,
   options: {
@@ -45,5 +53,6 @@ export function Get(
     params: options.params,
     timeout: options.timeout || 30000, // Default 10 second timeout
     validateStatus: (status) => status >= 200 && status < 300,
+    httpsAgent: keepaliveAgent,
   });
 }
