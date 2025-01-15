@@ -33,7 +33,7 @@ import require$$4$1 from "assert";
 import require$$1$3 from "tty";
 import require$$0$5 from "os";
 import zlib from "zlib";
-import { EventEmitter as EventEmitter$1 } from "events";
+import EventEmitter$2, { EventEmitter as EventEmitter$1 } from "events";
 import require$$0$8, { Transform } from "node:stream";
 import require$$0$6 from "buffer";
 import require$$1$4 from "string_decoder";
@@ -58397,131 +58397,202 @@ const SUPPORTED_DOCUMENT_TYPES = [
   "text/plain",
   "application/rtf"
 ];
+class DownloadQueue extends EventEmitter$2 {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "queue", []);
+    __publicField(this, "processing", /* @__PURE__ */ new Set());
+    __publicField(this, "failed", /* @__PURE__ */ new Map());
+    __publicField(this, "completed", /* @__PURE__ */ new Set());
+    __publicField(this, "maxRetries", 3);
+  }
+  addToQueue(request2) {
+    this.queue.push(request2);
+    this.emit("itemAdded");
+  }
+  getNext() {
+    return this.queue.shift() || null;
+  }
+  markAsProcessing(id) {
+    this.processing.add(id);
+  }
+  markAsCompleted(id) {
+    this.processing.delete(id);
+    this.completed.add(id);
+  }
+  addFailedItem(id, url2, error) {
+    const failedItem = this.failed.get(id) || { url: url2, error, retries: 0 };
+    failedItem.retries++;
+    if (failedItem.retries < this.maxRetries) {
+      this.queue.push({ id, url: url2 });
+      this.emit("itemAdded");
+    } else {
+      this.failed.set(id, failedItem);
+    }
+    this.processing.delete(id);
+  }
+  getFailedItems() {
+    return Array.from(this.failed.entries()).map(([id, item]) => ({
+      id,
+      ...item
+    }));
+  }
+  getStats() {
+    return {
+      queued: this.queue.length,
+      processing: this.processing.size,
+      completed: this.completed.size,
+      failed: this.failed.size,
+      total: this.queue.length + this.processing.size + this.completed.size + this.failed.size
+    };
+  }
+  isProcessing() {
+    return this.processing.size > 0 || this.queue.length > 0;
+  }
+  getQueueLength() {
+    return this.queue.length;
+  }
+}
 class DocumentDownloadService {
   constructor({
-    maxConcurrentDownloads = 50,
+    maxConcurrentDownloads = 5,
     downloadTimeout = 5e3,
     downloadPath = path$1.resolve("./downloads"),
     allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES
-  } = {}, logger2) {
+  } = {}, logger2 = null) {
     __publicField(this, "axiosInstance");
     __publicField(this, "downloadPath");
     __publicField(this, "concurrencyLimit");
     __publicField(this, "allowedMimeTypes");
+    __publicField(this, "downloadQueue");
+    __publicField(this, "isProcessing", false);
     __publicField(this, "logger");
     var _a3;
     this.logger = logger2;
-    (_a3 = this.logger) == null ? void 0 : _a3.log(
-      "DocumentDownloadService initialized with download path: " + downloadPath
-    );
+    (_a3 = this.logger) == null ? void 0 : _a3.log("Initializing DocumentDownloadService");
     this.axiosInstance = axios.create({
       timeout: downloadTimeout,
       responseType: "stream",
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
       validateStatus: (status) => status >= 200 && status < 400
-      // Wider success range
     });
     this.downloadPath = downloadPath;
     this.concurrencyLimit = pLimit(maxConcurrentDownloads);
     this.allowedMimeTypes = allowedMimeTypes;
+    this.downloadQueue = new DownloadQueue();
+    this.downloadQueue.on("itemAdded", () => {
+      if (!this.isProcessing) {
+        this.processQueue();
+      }
+    });
     this.ensureDownloadDirectory();
   }
   async ensureDownloadDirectory() {
+    var _a3, _b;
     try {
       await fs$1.mkdir(this.downloadPath, { recursive: true });
+      (_a3 = this.logger) == null ? void 0 : _a3.log(`Download directory created: ${this.downloadPath}`);
     } catch (error) {
-      console.error("Failed to create download directory:", error);
+      (_b = this.logger) == null ? void 0 : _b.error(`Failed to create download directory: ${error}`);
     }
   }
   generateFileName(id, mimeType) {
-    var _a3;
     const extension = mime$1.extension(mimeType) || "bin";
-    (_a3 = this.logger) == null ? void 0 : _a3.log(`Generated file name for ${id}: ${id}.${extension}`);
     return `${id}.${extension}`;
   }
   validateDocumentType(mimeType) {
     return this.allowedMimeTypes.includes(mimeType);
   }
-  async downloadSingleDocument(request2) {
+  async addToQueue(requests) {
+    var _a3;
+    const requestArray = Array.isArray(requests) ? requests : [requests];
+    requestArray.forEach((request2) => {
+      var _a4;
+      this.downloadQueue.addToQueue(request2);
+      (_a4 = this.logger) == null ? void 0 : _a4.log(`Added to queue: ${request2.url} (ID: ${request2.id})`);
+    });
+    const stats = this.downloadQueue.getStats();
+    (_a3 = this.logger) == null ? void 0 : _a3.log(
+      `Queue status: ${stats.queued} queued, ${stats.processing} processing, ${stats.completed} completed, ${stats.failed} failed (Total: ${stats.total})`
+    );
+  }
+  async processQueue() {
     var _a3, _b, _c;
+    this.isProcessing = true;
+    (_a3 = this.logger) == null ? void 0 : _a3.log("Starting queue processing");
+    while (this.downloadQueue.isProcessing()) {
+      const concurrentDownloads = [];
+      const maxConcurrent = 5;
+      while (concurrentDownloads.length < maxConcurrent && this.downloadQueue.getQueueLength() > 0) {
+        const request2 = this.downloadQueue.getNext();
+        if (request2) {
+          const downloadPromise = this.processSingleDownload(request2);
+          concurrentDownloads.push(downloadPromise);
+        }
+      }
+      if (concurrentDownloads.length > 0) {
+        await Promise.all(concurrentDownloads);
+        const stats = this.downloadQueue.getStats();
+        (_b = this.logger) == null ? void 0 : _b.log(
+          `Batch complete - Successfully downloaded: ${stats.completed}, Failed: ${stats.failed}, Remaining in queue: ${stats.queued}`
+        );
+      }
+    }
+    const finalStats = this.downloadQueue.getStats();
+    (_c = this.logger) == null ? void 0 : _c.log(
+      `Download session complete - Total processed: ${finalStats.total}, Successfully downloaded: ${finalStats.completed}, Failed: ${finalStats.failed}`
+    );
+    this.isProcessing = false;
+  }
+  async processSingleDownload(request2) {
+    var _a3, _b, _c;
+    this.downloadQueue.markAsProcessing(request2.id);
+    (_a3 = this.logger) == null ? void 0 : _a3.log(`Starting download: ${request2.url} (ID: ${request2.id})`);
     try {
       const response2 = await this.axiosInstance.get(request2.url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           Accept: "application/pdf,text/html,application/msword,*/*",
           "Accept-Encoding": "gzip, deflate, br"
         }
       });
-      const contentType = ((_a3 = response2.headers["content-type"]) == null ? void 0 : _a3.split(";")[0].trim()) || "application/octet-stream";
+      const contentType = ((_b = response2.headers["content-type"]) == null ? void 0 : _b.split(";")[0].trim()) || "application/octet-stream";
       if (!this.validateDocumentType(contentType)) {
         throw new Error(`Unsupported document type: ${contentType}`);
       }
       const fileName = this.generateFileName(request2.id, contentType);
       const filePath = path$1.join(this.downloadPath, fileName);
-      const writer = createWriteStream(filePath);
-      response2.data.pipe(writer);
-      return new Promise((resolve, reject) => {
-        writer.on(
-          "finish",
-          () => resolve({
-            id: request2.id,
-            url: request2.url,
-            success: true,
-            fileName,
-            filePath,
-            mimeType: contentType
-          })
-        );
+      await new Promise((resolve, reject) => {
+        const writer = createWriteStream(filePath);
+        response2.data.pipe(writer);
+        writer.on("finish", () => {
+          var _a4;
+          this.downloadQueue.markAsCompleted(request2.id);
+          (_a4 = this.logger) == null ? void 0 : _a4.log(
+            `Successfully downloaded: ${request2.url} -> ${fileName}`
+          );
+          resolve();
+        });
         writer.on("error", (error) => {
           fs$1.unlink(filePath).catch(() => {
           });
-          reject({
-            id: request2.id,
-            url: request2.url,
-            success: false,
-            error: error.message,
-            mimeType: contentType
-          });
+          reject(error);
         });
       });
     } catch (error) {
-      if (error instanceof Error) {
-        (_b = this.logger) == null ? void 0 : _b.error(
-          `Download failed for ${request2.url}: ${error.message}`
-        );
-      } else {
-        (_c = this.logger) == null ? void 0 : _c.error(`Download failed for ${request2.url}: Unknown error`);
-      }
-      console.error(`Download failed for ${request2.url}:`);
-      return {
-        id: request2.id,
-        url: request2.url,
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown download error"
-      };
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      (_c = this.logger) == null ? void 0 : _c.error(
+        `Download failed for ${request2.url} (ID: ${request2.id}): ${errorMessage}`
+      );
+      this.downloadQueue.addFailedItem(request2.id, request2.url, errorMessage);
     }
   }
-  async downloadDocuments(requests) {
-    const downloadTasks = requests.map(
-      (request2) => this.concurrencyLimit(
-        () => this.downloadSingleDocument(request2).catch((error) => ({
-          id: request2.id,
-          url: request2.url,
-          success: false,
-          error: error.message || "Unexpected error"
-        }))
-      )
-    );
-    const results = await Promise.all(downloadTasks);
-    return {
-      successful: results.filter((result) => result.success),
-      failed: results.filter((result) => !result.success)
-    };
+  getFailedDownloads() {
+    return this.downloadQueue.getFailedItems();
   }
-  // Method to update allowed MIME types
-  setAllowedMimeTypes(mimeTypes2) {
-    this.allowedMimeTypes = mimeTypes2;
+  getQueueStats() {
+    return this.downloadQueue.getStats();
   }
 }
 class Logger {
@@ -59007,7 +59078,9 @@ function fireEvent$1(Type, message) {
   if (f) f(Type, message);
 }
 async function start(url2, type, range, location) {
+  let isRunning = true;
   const DocumentData = await Get(url2);
+  let downloadService = null;
   if (DocumentData.data) {
     const { maxpages, title } = parseHomePageRight(DocumentData.data);
     const Writer = new CSVWriter(location, title, logger$1);
@@ -59027,7 +59100,7 @@ async function start(url2, type, range, location) {
     }
     console.log(type, range);
     logger$1 == null ? void 0 : logger$1.warn(`TYPE: ${type}, start: ${start2}, end: ${end2}`);
-    const downloadService = new DocumentDownloadService(
+    downloadService = new DocumentDownloadService(
       {
         maxConcurrentDownloads: 10,
         downloadPath: `${location}/regulamente`,
@@ -59069,12 +59142,8 @@ async function start(url2, type, range, location) {
       }));
       logger$1 == null ? void 0 : logger$1.log(`Downloading ${documentRequests.length} documents`);
       try {
-        const results = await downloadService.downloadDocuments(
-          documentRequests
-        );
-        logger$1 == null ? void 0 : logger$1.log(
-          `Downloaded ${results.successful.length} documents successfully, ${results.failed.length} documents failed`
-        );
+        await downloadService.addToQueue(documentRequests);
+        console.log("Current queue stats:", downloadService.getQueueStats());
       } catch (error) {
         console.error("Batch download failed:", error);
         logger$1 == null ? void 0 : logger$1.error("Batch download failed");
@@ -59085,6 +59154,16 @@ async function start(url2, type, range, location) {
       listData = [];
     }
     Writer.close();
+    while (isRunning) {
+      await new Promise((resolve) => setTimeout(resolve, 1e3));
+      if (!(downloadService == null ? void 0 : downloadService.isprocessing())) {
+        console.log("All downloads completed");
+        isRunning = false;
+        await (downloadService == null ? void 0 : downloadService.shutdown());
+      } else {
+        console.log("Downloads in progress...");
+      }
+    }
   }
   logger$1 == null ? void 0 : logger$1.warn("Download complete");
   fireEvent$1("complete", true);

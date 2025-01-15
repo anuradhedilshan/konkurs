@@ -99,7 +99,9 @@ export default async function start(
   range: { start: number; end: number },
   location: string
 ) {
+  let isRunning = true;
   const DocumentData = await Get(url);
+  let downloadService = null;
   if (DocumentData.data) {
     const { maxpages, title } = parseHomePageRight(DocumentData.data);
     const Writer = new CSVWriter(location, title, logger);
@@ -123,7 +125,7 @@ export default async function start(
 
     logger?.warn(`TYPE: ${type}, start: ${start}, end: ${end}`);
 
-    const downloadService = new DocumentDownloadService(
+    downloadService = new DocumentDownloadService(
       {
         maxConcurrentDownloads: 10,
         downloadPath: `${location}/regulamente`,
@@ -136,6 +138,7 @@ export default async function start(
       },
       logger
     );
+
     await sleep(1000);
     for (let p = start; p < end; p++) {
       const DocumentData = await Get(`${url}/${p}`);
@@ -172,12 +175,8 @@ export default async function start(
       logger?.log(`Downloading ${documentRequests.length} documents`);
 
       try {
-        const results = await downloadService.downloadDocuments(
-          documentRequests
-        );
-        logger?.log(
-          `Downloaded ${results.successful.length} documents successfully, ${results.failed.length} documents failed`
-        );
+        await downloadService.addToQueue(documentRequests);
+        console.log("Current queue stats:", downloadService.getQueueStats());
       } catch (error) {
         console.error("Batch download failed:", error);
         logger?.error("Batch download failed");
@@ -188,6 +187,17 @@ export default async function start(
       listData = [];
     }
     Writer.close();
+    while (isRunning) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      if (!downloadService?.isprocessing()) {
+        console.log("All downloads completed");
+        isRunning = false;
+        await downloadService?.shutdown();
+      } else {
+        console.log("Downloads in progress...");
+      }
+    }
   }
 
   logger?.warn("Download complete");
