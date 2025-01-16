@@ -58,8 +58,7 @@ export class DownloadQueue extends EventEmitter {
   private failed: Map<string, { url: string; error: string; retries: number }> =
     new Map();
   private completed: Set<string> = new Set();
-  private maxRetries = 3;
-
+  private maxRetries = 0;
   addToQueue(request: DownloadRequest): void {
     this.queue.push(request);
     this.emit("itemAdded");
@@ -133,11 +132,12 @@ export class DocumentDownloadService {
   private allowedMimeTypes: string[];
   private downloadQueue: DownloadQueue;
   private isProcessing: boolean = false;
+  private isShuttingDown = false;
   logger: Logger | null;
 
   constructor(
     {
-      maxConcurrentDownloads = 5,
+      maxConcurrentDownloads = 10,
       downloadTimeout = 5000,
       downloadPath = path.resolve("./downloads"),
       allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES,
@@ -240,8 +240,6 @@ export class DocumentDownloadService {
     this.isProcessing = false;
   }
 
-
-  
   private async processSingleDownload(request: DownloadRequest): Promise<void> {
     this.downloadQueue.markAsProcessing(request.id);
     this.logger?.log(`Starting download: ${request.url} (ID: ${request.id})`);
@@ -305,6 +303,17 @@ export class DocumentDownloadService {
 
   getQueueStats(): QueueStats {
     return this.downloadQueue.getStats();
+  }
+
+  isprocessing(): boolean {
+    return this.downloadQueue.isProcessing();
+  }
+  async shutdown(): Promise<void> {
+    this.isShuttingDown = true;
+    if (!this.downloadQueue.isProcessing()) {
+      process.exit(0);
+    }
+    // Will exit when queue becomes empty due to event listener
   }
 }
 

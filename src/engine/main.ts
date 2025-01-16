@@ -188,13 +188,17 @@ export default async function start(
     }
     Writer.close();
     while (isRunning) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       if (!downloadService?.isprocessing()) {
         console.log("All downloads completed");
         isRunning = false;
-        await downloadService?.shutdown();
+        downloadService = null;
       } else {
+        const queueStats = downloadService.getQueueStats();
+        logger?.warn(
+          `Queue stats: queued: ${queueStats.queued}, processing: ${queueStats.processing}, completed: ${queueStats.completed}, failed: ${queueStats.failed}, total: ${queueStats.total}`
+        );
         console.log("Downloads in progress...");
       }
     }
