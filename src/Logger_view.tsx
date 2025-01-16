@@ -1,6 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { CB } from "../electron/render";
 import { ActionType, useStore } from "./store/app.store";
+import ProcessingProgressBar from "./ProgressBar";
 
 type LogLevel = "info" | "error" | "warn" | "table";
 
@@ -25,7 +32,8 @@ const LogTerminal: React.FC = () => {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [detail, setDetail] = useState("N/A");
-  const { dispatch } = useStore();
+  const [isComplete, setComplete] = useState(false);
+  const { dispatch, state } = useStore();
   const addLog = useCallback((newLog: LogEntry | LogEntry[]) => {
     setLogs((prevLogs) => {
       const logsToAdd = Array.isArray(newLog) ? newLog : [newLog];
@@ -61,10 +69,12 @@ const LogTerminal: React.FC = () => {
           break;
         case "progress":
           setProgress(message as unknown as number);
+          if (isComplete == true) setComplete(false);
           break;
         case "complete":
           dispatch({ type: ActionType.SET_STATUS, payload: "idle" });
           setProgress(0);
+          setComplete(true);
           break;
         default:
           console.warn("Unhandled event type:", type);
@@ -76,7 +86,7 @@ const LogTerminal: React.FC = () => {
     return () => {
       window.MyApi.OnEvent = null;
     };
-  }, [addLog, dispatch]);
+  }, [addLog, dispatch, isComplete]);
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -106,7 +116,10 @@ const LogTerminal: React.FC = () => {
   return (
     <div className="mt-3">
       <h1 className="mt-3 mb-4 text-xl">{detail}</h1>
-      <div  ref={logContainerRef} className="bg-gray-900 text-white font-mono p-4 rounded-lg shadow-lg w-full h-[400px] overflow-y-auto">
+      <div
+        ref={logContainerRef}
+        className="bg-gray-900 text-white font-mono p-4 rounded-lg shadow-lg w-full h-[400px] overflow-y-auto"
+      >
         {logs.map((log, index) => (
           <div key={index} className="mb-1">
             {log.timestamp && (
@@ -127,11 +140,23 @@ const LogTerminal: React.FC = () => {
       </div>
       {/* Progress Bar */}
 
-      <div className="w-[90%] bg-gray-200 mt-4 rounded-full h-4 mb-3">
-        <div
-          className="bg-blue-600 h-4 rounded-full"
-          style={{ width: `${progress}%` }}
-        ></div>
+      <div className="space-y-4">
+        <ProcessingProgressBar
+          Status={state.status}
+          progress={progress}
+          isComplete={isComplete}
+        />
+
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            Status:{" "}
+            {isComplete
+              ? "Complete"
+              : state.status == "running"
+              ? "In Progress"
+              : "Idle"}
+          </p>
+        </div>
       </div>
     </div>
   );

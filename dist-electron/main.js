@@ -58404,7 +58404,7 @@ class DownloadQueue extends EventEmitter$2 {
     __publicField(this, "processing", /* @__PURE__ */ new Set());
     __publicField(this, "failed", /* @__PURE__ */ new Map());
     __publicField(this, "completed", /* @__PURE__ */ new Set());
-    __publicField(this, "maxRetries", 3);
+    __publicField(this, "maxRetries", 0);
   }
   addToQueue(request2) {
     this.queue.push(request2);
@@ -58455,7 +58455,7 @@ class DownloadQueue extends EventEmitter$2 {
 }
 class DocumentDownloadService {
   constructor({
-    maxConcurrentDownloads = 5,
+    maxConcurrentDownloads = 10,
     downloadTimeout = 5e3,
     downloadPath = path$1.resolve("./downloads"),
     allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES
@@ -58466,6 +58466,7 @@ class DocumentDownloadService {
     __publicField(this, "allowedMimeTypes");
     __publicField(this, "downloadQueue");
     __publicField(this, "isProcessing", false);
+    __publicField(this, "isShuttingDown", false);
     __publicField(this, "logger");
     var _a3;
     this.logger = logger2;
@@ -58593,6 +58594,15 @@ class DocumentDownloadService {
   }
   getQueueStats() {
     return this.downloadQueue.getStats();
+  }
+  isprocessing() {
+    return this.downloadQueue.isProcessing();
+  }
+  async shutdown() {
+    this.isShuttingDown = true;
+    if (!this.downloadQueue.isProcessing()) {
+      process.exit(0);
+    }
   }
 }
 class Logger {
@@ -59155,12 +59165,16 @@ async function start(url2, type, range, location) {
     }
     Writer.close();
     while (isRunning) {
-      await new Promise((resolve) => setTimeout(resolve, 1e3));
+      await new Promise((resolve) => setTimeout(resolve, 3e3));
       if (!(downloadService == null ? void 0 : downloadService.isprocessing())) {
         console.log("All downloads completed");
         isRunning = false;
-        await (downloadService == null ? void 0 : downloadService.shutdown());
+        downloadService = null;
       } else {
+        const queueStats = downloadService.getQueueStats();
+        logger$1 == null ? void 0 : logger$1.warn(
+          `Queue stats: queued: ${queueStats.queued}, processing: ${queueStats.processing}, completed: ${queueStats.completed}, failed: ${queueStats.failed}, total: ${queueStats.total}`
+        );
         console.log("Downloads in progress...");
       }
     }

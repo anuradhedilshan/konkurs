@@ -1,8 +1,8 @@
 import LogTerminal from "./Logger_view";
-import { useStore } from "./store/app.store";
+import { ActionType, useStore } from "./store/app.store";
 
 const Start = () => {
-  const { state } = useStore();
+  const { state ,dispatch } = useStore();
   console.log("STart Button render");
 
   return (
@@ -25,6 +25,7 @@ const Start = () => {
               state.range,
               state.link
             );
+            dispatch({ type: ActionType.SET_STATUS, payload: "running" });
           } else {
             if (window.MyApi.OnEvent)
               window.MyApi.OnEvent(
