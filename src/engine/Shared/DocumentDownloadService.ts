@@ -3,7 +3,6 @@ import fs from "fs/promises";
 import path from "path";
 import { createWriteStream } from "fs";
 import { Readable } from "stream";
-import pLimit from "p-limit";
 import mime from "mime-types";
 import EventEmitter from "events";
 import Logger from "./Logger";
@@ -128,11 +127,11 @@ export class DownloadQueue extends EventEmitter {
 export class DocumentDownloadService {
   private axiosInstance: AxiosInstance;
   private downloadPath: string;
-  private concurrencyLimit: ReturnType<typeof pLimit>;
   private allowedMimeTypes: string[];
   private downloadQueue: DownloadQueue;
   private isProcessing: boolean = false;
-  private isShuttingDown = false;
+  private maxConcurrentDownloads: number;
+
   logger: Logger | null;
 
   constructor(
@@ -156,9 +155,10 @@ export class DocumentDownloadService {
     });
 
     this.downloadPath = downloadPath;
-    this.concurrencyLimit = pLimit(maxConcurrentDownloads);
+
     this.allowedMimeTypes = allowedMimeTypes;
     this.downloadQueue = new DownloadQueue();
+    this.maxConcurrentDownloads = maxConcurrentDownloads
 
     this.downloadQueue.on("itemAdded", () => {
       if (!this.isProcessing) {
@@ -209,10 +209,9 @@ export class DocumentDownloadService {
 
     while (this.downloadQueue.isProcessing()) {
       const concurrentDownloads: Promise<void>[] = [];
-      const maxConcurrent = 5;
 
       while (
-        concurrentDownloads.length < maxConcurrent &&
+        concurrentDownloads.length < this.maxConcurrentDownloads &&
         this.downloadQueue.getQueueLength() > 0
       ) {
         const request = this.downloadQueue.getNext();
@@ -307,13 +306,6 @@ export class DocumentDownloadService {
 
   isprocessing(): boolean {
     return this.downloadQueue.isProcessing();
-  }
-  async shutdown(): Promise<void> {
-    this.isShuttingDown = true;
-    if (!this.downloadQueue.isProcessing()) {
-      process.exit(0);
-    }
-    // Will exit when queue becomes empty due to event listener
   }
 }
 

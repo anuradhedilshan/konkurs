@@ -10,15 +10,7 @@ var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read fr
 var __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot add the same private member more than once") : member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
 var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 var __privateMethod = (obj, member, method) => (__accessCheck(obj, member, "access private method"), method);
-var __privateWrapper = (obj, member, setter, getter) => ({
-  set _(value) {
-    __privateSet(obj, member, value, setter);
-  },
-  get _() {
-    return __privateGet(obj, member, getter);
-  }
-});
-var _dispatcher, _dispatch, _a2, _head, _tail, _size;
+var _dispatcher, _dispatch, _a2;
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import path$2 from "node:path";
@@ -16494,7 +16486,7 @@ const Style = ElementType.Style;
 const Tag = ElementType.Tag;
 const CDATA$1 = ElementType.CDATA;
 const Doctype = ElementType.Doctype;
-let Node$1 = class Node {
+class Node {
   constructor() {
     this.parent = null;
     this.prev = null;
@@ -16542,8 +16534,8 @@ let Node$1 = class Node {
   cloneNode(recursive = false) {
     return cloneNode(this, recursive);
   }
-};
-class DataNode extends Node$1 {
+}
+class DataNode extends Node {
   /**
    * @param data The content of the data node
    */
@@ -16590,7 +16582,7 @@ class ProcessingInstruction extends DataNode {
     return 1;
   }
 }
-class NodeWithChildren extends Node$1 {
+class NodeWithChildren extends Node {
   /**
    * @param children Children of the node. Only certain node types can have children.
    */
@@ -56447,7 +56439,7 @@ function requireFrame() {
   } catch {
     crypto = {
       // not full compatibility, but minimum.
-      randomFillSync: function randomFillSync(buffer3, _offset, _size2) {
+      randomFillSync: function randomFillSync(buffer3, _offset, _size) {
         for (let i = 0; i < buffer3.length; ++i) {
           buffer3[i] = Math.random() * 255 | 0;
         }
@@ -58258,136 +58250,6 @@ const parseCampaign = (html2) => {
 function sleep(ms2) {
   return new Promise((resolve) => setTimeout(resolve, ms2));
 }
-class Node2 {
-  constructor(value) {
-    __publicField(this, "value");
-    __publicField(this, "next");
-    this.value = value;
-  }
-}
-class Queue {
-  constructor() {
-    __privateAdd(this, _head);
-    __privateAdd(this, _tail);
-    __privateAdd(this, _size);
-    this.clear();
-  }
-  enqueue(value) {
-    const node2 = new Node2(value);
-    if (__privateGet(this, _head)) {
-      __privateGet(this, _tail).next = node2;
-      __privateSet(this, _tail, node2);
-    } else {
-      __privateSet(this, _head, node2);
-      __privateSet(this, _tail, node2);
-    }
-    __privateWrapper(this, _size)._++;
-  }
-  dequeue() {
-    const current = __privateGet(this, _head);
-    if (!current) {
-      return;
-    }
-    __privateSet(this, _head, __privateGet(this, _head).next);
-    __privateWrapper(this, _size)._--;
-    return current.value;
-  }
-  peek() {
-    if (!__privateGet(this, _head)) {
-      return;
-    }
-    return __privateGet(this, _head).value;
-  }
-  clear() {
-    __privateSet(this, _head, void 0);
-    __privateSet(this, _tail, void 0);
-    __privateSet(this, _size, 0);
-  }
-  get size() {
-    return __privateGet(this, _size);
-  }
-  *[Symbol.iterator]() {
-    let current = __privateGet(this, _head);
-    while (current) {
-      yield current.value;
-      current = current.next;
-    }
-  }
-}
-_head = new WeakMap();
-_tail = new WeakMap();
-_size = new WeakMap();
-function pLimit(concurrency) {
-  validateConcurrency(concurrency);
-  const queue = new Queue();
-  let activeCount = 0;
-  const resumeNext = () => {
-    if (activeCount < concurrency && queue.size > 0) {
-      queue.dequeue()();
-      activeCount++;
-    }
-  };
-  const next2 = () => {
-    activeCount--;
-    resumeNext();
-  };
-  const run = async (function_, resolve, arguments_) => {
-    const result = (async () => function_(...arguments_))();
-    resolve(result);
-    try {
-      await result;
-    } catch {
-    }
-    next2();
-  };
-  const enqueue = (function_, resolve, arguments_) => {
-    new Promise((internalResolve) => {
-      queue.enqueue(internalResolve);
-    }).then(
-      run.bind(void 0, function_, resolve, arguments_)
-    );
-    (async () => {
-      await Promise.resolve();
-      if (activeCount < concurrency) {
-        resumeNext();
-      }
-    })();
-  };
-  const generator = (function_, ...arguments_) => new Promise((resolve) => {
-    enqueue(function_, resolve, arguments_);
-  });
-  Object.defineProperties(generator, {
-    activeCount: {
-      get: () => activeCount
-    },
-    pendingCount: {
-      get: () => queue.size
-    },
-    clearQueue: {
-      value() {
-        queue.clear();
-      }
-    },
-    concurrency: {
-      get: () => concurrency,
-      set(newConcurrency) {
-        validateConcurrency(newConcurrency);
-        concurrency = newConcurrency;
-        queueMicrotask(() => {
-          while (activeCount < concurrency && queue.size > 0) {
-            resumeNext();
-          }
-        });
-      }
-    }
-  });
-  return generator;
-}
-function validateConcurrency(concurrency) {
-  if (!((Number.isInteger(concurrency) || concurrency === Number.POSITIVE_INFINITY) && concurrency > 0)) {
-    throw new TypeError("Expected `concurrency` to be a number from 1 and up");
-  }
-}
 const SUPPORTED_DOCUMENT_TYPES = [
   "application/pdf",
   "text/html",
@@ -58463,11 +58325,10 @@ class DocumentDownloadService {
   } = {}, logger2 = null) {
     __publicField(this, "axiosInstance");
     __publicField(this, "downloadPath");
-    __publicField(this, "concurrencyLimit");
     __publicField(this, "allowedMimeTypes");
     __publicField(this, "downloadQueue");
     __publicField(this, "isProcessing", false);
-    __publicField(this, "isShuttingDown", false);
+    __publicField(this, "maxConcurrentDownloads");
     __publicField(this, "logger");
     var _a3;
     this.logger = logger2;
@@ -58480,9 +58341,9 @@ class DocumentDownloadService {
       validateStatus: (status) => status >= 200 && status < 400
     });
     this.downloadPath = downloadPath;
-    this.concurrencyLimit = pLimit(maxConcurrentDownloads);
     this.allowedMimeTypes = allowedMimeTypes;
     this.downloadQueue = new DownloadQueue();
+    this.maxConcurrentDownloads = maxConcurrentDownloads;
     this.downloadQueue.on("itemAdded", () => {
       if (!this.isProcessing) {
         this.processQueue();
@@ -58525,8 +58386,7 @@ class DocumentDownloadService {
     (_a3 = this.logger) == null ? void 0 : _a3.log("Starting queue processing");
     while (this.downloadQueue.isProcessing()) {
       const concurrentDownloads = [];
-      const maxConcurrent = 5;
-      while (concurrentDownloads.length < maxConcurrent && this.downloadQueue.getQueueLength() > 0) {
+      while (concurrentDownloads.length < this.maxConcurrentDownloads && this.downloadQueue.getQueueLength() > 0) {
         const request2 = this.downloadQueue.getNext();
         if (request2) {
           const downloadPromise = this.processSingleDownload(request2);
@@ -58598,12 +58458,6 @@ class DocumentDownloadService {
   }
   isprocessing() {
     return this.downloadQueue.isProcessing();
-  }
-  async shutdown() {
-    this.isShuttingDown = true;
-    if (!this.downloadQueue.isProcessing()) {
-      process.exit(0);
-    }
   }
 }
 class Logger {
@@ -59153,6 +59007,7 @@ async function start(url2, type, range, location) {
       }));
       logger$1 == null ? void 0 : logger$1.log(`Downloading ${documentRequests.length} documents`);
       try {
+        await downloadService.addToQueue(documentRequests);
         console.log("Current queue stats:", downloadService.getQueueStats());
       } catch (error) {
         console.error("Batch download failed:", error);
