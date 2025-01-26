@@ -131,6 +131,8 @@ ipcMain.on("start", async (_e, type, location, range, link) => {
   logger.log("Staring . . . . ");
   try {
     await start(link, type, range, location);
+    console.log("*****************end***************");
+    
     fireEvent("complete", true);
     State = false;
   } catch (e) {
