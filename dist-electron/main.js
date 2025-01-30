@@ -58261,13 +58261,14 @@ const SUPPORTED_DOCUMENT_TYPES = [
   "application/rtf"
 ];
 class DownloadQueue extends EventEmitter$2 {
-  constructor() {
-    super(...arguments);
+  constructor(maxRetries = 3) {
+    super();
     __publicField(this, "queue", []);
     __publicField(this, "processing", /* @__PURE__ */ new Set());
     __publicField(this, "failed", /* @__PURE__ */ new Map());
     __publicField(this, "completed", /* @__PURE__ */ new Set());
-    __publicField(this, "maxRetries", 0);
+    __publicField(this, "maxRetries");
+    this.maxRetries = maxRetries;
   }
   addToQueue(request2) {
     this.queue.push(request2);
@@ -58321,7 +58322,8 @@ class DocumentDownloadService {
     maxConcurrentDownloads = 10,
     downloadTimeout = 5e3,
     downloadPath = path$1.resolve("./downloads"),
-    allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES
+    allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES,
+    maxRetries = 3
   } = {}, logger2 = null) {
     __publicField(this, "axiosInstance");
     __publicField(this, "downloadPath");
@@ -58342,8 +58344,8 @@ class DocumentDownloadService {
     });
     this.downloadPath = downloadPath;
     this.allowedMimeTypes = allowedMimeTypes;
-    this.downloadQueue = new DownloadQueue();
     this.maxConcurrentDownloads = maxConcurrentDownloads;
+    this.downloadQueue = new DownloadQueue(maxRetries);
     this.downloadQueue.on("itemAdded", () => {
       if (!this.isProcessing) {
         this.processQueue();
@@ -58358,6 +58360,7 @@ class DocumentDownloadService {
       (_a3 = this.logger) == null ? void 0 : _a3.log(`Download directory created: ${this.downloadPath}`);
     } catch (error) {
       (_b = this.logger) == null ? void 0 : _b.error(`Failed to create download directory: ${error}`);
+      throw error;
     }
   }
   generateFileName(id, mimeType) {
@@ -58381,31 +58384,37 @@ class DocumentDownloadService {
     );
   }
   async processQueue() {
-    var _a3, _b, _c;
+    var _a3, _b, _c, _d;
+    if (this.isProcessing) return;
     this.isProcessing = true;
     (_a3 = this.logger) == null ? void 0 : _a3.log("Starting queue processing");
-    while (this.downloadQueue.isProcessing()) {
-      const concurrentDownloads = [];
-      while (concurrentDownloads.length < this.maxConcurrentDownloads && this.downloadQueue.getQueueLength() > 0) {
-        const request2 = this.downloadQueue.getNext();
-        if (request2) {
-          const downloadPromise = this.processSingleDownload(request2);
-          concurrentDownloads.push(downloadPromise);
+    try {
+      while (this.downloadQueue.isProcessing()) {
+        const concurrentDownloads = [];
+        while (concurrentDownloads.length < this.maxConcurrentDownloads && this.downloadQueue.getQueueLength() > 0) {
+          const request2 = this.downloadQueue.getNext();
+          if (request2) {
+            const downloadPromise = this.processSingleDownload(request2);
+            concurrentDownloads.push(downloadPromise);
+          }
+        }
+        if (concurrentDownloads.length > 0) {
+          await Promise.all(concurrentDownloads);
+          const stats = this.downloadQueue.getStats();
+          (_b = this.logger) == null ? void 0 : _b.log(
+            `Batch complete - Successfully downloaded: ${stats.completed}, Failed: ${stats.failed}, Remaining in queue: ${stats.queued}`
+          );
         }
       }
-      if (concurrentDownloads.length > 0) {
-        await Promise.all(concurrentDownloads);
-        const stats = this.downloadQueue.getStats();
-        (_b = this.logger) == null ? void 0 : _b.log(
-          `Batch complete - Successfully downloaded: ${stats.completed}, Failed: ${stats.failed}, Remaining in queue: ${stats.queued}`
-        );
-      }
+      const finalStats = this.downloadQueue.getStats();
+      (_c = this.logger) == null ? void 0 : _c.log(
+        `Download session complete - Total processed: ${finalStats.total}, Successfully downloaded: ${finalStats.completed}, Failed: ${finalStats.failed}`
+      );
+    } catch (error) {
+      (_d = this.logger) == null ? void 0 : _d.error(`Error processing queue: ${error}`);
+    } finally {
+      this.isProcessing = false;
     }
-    const finalStats = this.downloadQueue.getStats();
-    (_c = this.logger) == null ? void 0 : _c.log(
-      `Download session complete - Total processed: ${finalStats.total}, Successfully downloaded: ${finalStats.completed}, Failed: ${finalStats.failed}`
-    );
-    this.isProcessing = false;
   }
   async processSingleDownload(request2) {
     var _a3, _b, _c;
@@ -58456,8 +58465,8 @@ class DocumentDownloadService {
   getQueueStats() {
     return this.downloadQueue.getStats();
   }
-  isprocessing() {
-    return this.downloadQueue.isProcessing();
+  ISProcessing() {
+    return this.isProcessing;
   }
 }
 class Logger {
@@ -58916,7 +58925,7 @@ const retryConfig = {
     const url2 = (_a3 = error.config) == null ? void 0 : _a3.url;
     const isKonkursUrl = url2 && url2.startsWith("https://www.konkurs.ro/");
     const isDnsError = error.code ? DNS_ERROR_CODES.includes(error.code) : false;
-    if (isKonkursUrl && (isDnsError || axiosRetry.isNetworkOrIdempotentRequestError(error))) {
+    if (isKonkursUrl || isDnsError || axiosRetry.isNetworkOrIdempotentRequestError(error)) {
       console.log("Retrying request due to DNS or network error");
       return true;
     }
@@ -59021,7 +59030,7 @@ async function start(url2, type, range, location) {
     Writer.close();
     while (isRunning) {
       await new Promise((resolve) => setTimeout(resolve, 3e3));
-      if (!(downloadService == null ? void 0 : downloadService.isprocessing())) {
+      if (!(downloadService == null ? void 0 : downloadService.IsProcessing())) {
         console.log("All downloads completed");
         isRunning = false;
         downloadService = null;

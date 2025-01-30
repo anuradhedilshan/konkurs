@@ -45,8 +45,9 @@ const retryConfig: IAxiosRetryConfig = {
 
     // Retry if it's a Konkurs URL and either a DNS error or a network error
     if (
-      isKonkursUrl &&
-      (isDnsError || axiosRetry.isNetworkOrIdempotentRequestError(error))
+      isKonkursUrl ||
+      isDnsError ||
+      axiosRetry.isNetworkOrIdempotentRequestError(error)
     ) {
       console.log("Retrying request due to DNS or network error");
       return true;
@@ -190,7 +191,7 @@ export default async function start(
     while (isRunning) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      if (!downloadService?.isprocessing()) {
+      if (!downloadService?.IsProcessing()) {
         console.log("All downloads completed");
         isRunning = false;
         downloadService = null;
