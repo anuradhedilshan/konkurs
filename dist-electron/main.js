@@ -59064,6 +59064,7 @@ async function start(url2, type, range, location) {
       }
     }
   }
+  console.log("DOwnlod COmplete ************************");
   logger$1 == null ? void 0 : logger$1.warn("Download complete");
   fireEvent$1("complete", true);
   return;

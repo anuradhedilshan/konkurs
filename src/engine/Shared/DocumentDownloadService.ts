@@ -57,7 +57,7 @@ export class DownloadQueue extends EventEmitter {
   private maxRetries: number;
   private activeDownloads: number = 0;
 
-  constructor(maxRetries: number = 3) {
+  constructor(maxRetries: number = 1) {
     super();
     this.maxRetries = maxRetries;
   }
@@ -88,6 +88,8 @@ export class DownloadQueue extends EventEmitter {
     failedItem.retries++;
 
     if (failedItem.retries < this.maxRetries) {
+      console.log("pushed Failed Item", url);
+
       this.queue.push({ id, url });
       this.emit("itemAdded");
     } else {
@@ -153,7 +155,7 @@ export class DocumentDownloadService {
       downloadTimeout = 5000,
       downloadPath = path.resolve("./downloads"),
       allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES,
-      maxRetries = 3,
+      maxRetries = 1,
     }: DocumentDownloadOptions = {},
     logger: Logger | null = null
   ) {

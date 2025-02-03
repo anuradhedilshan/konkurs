@@ -2,7 +2,9 @@ import { CB } from "../../../electron/render";
 import start, { setLoggerCallback } from "../main";
 
 const eventTest: CB = (Type, message) => {
-  console.log(Type, message);
+  if (Type == "error" || Type == "warn") {
+    console.log(`${Type}:${message}`);
+  }
 };
 
 (async () => {
