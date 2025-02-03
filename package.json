@@ -8,7 +8,7 @@
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vite-node  ./src/engine/test/index.ts"
+    "test": "tsx  ./src/engine/test/index.ts"
   },
   "dependencies": {
     "agentkeepalive": "^4.6.0",
@@ -20,7 +20,8 @@
     "nodejs-file-downloader": "^4.13.0",
     "p-limit": "^6.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/mime-types": "^2.1.4",

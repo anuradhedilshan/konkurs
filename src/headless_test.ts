@@ -1,5 +1,5 @@
-import { CB } from "../../../electron/render";
-import start, { setLoggerCallback } from "../main";
+import { CB } from "../electron/render";
+import start, { setLoggerCallback } from "./engine/main";
 
 const eventTest: CB = (Type, message) => {
   console.log(Type, message);
