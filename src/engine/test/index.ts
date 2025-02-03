@@ -13,7 +13,7 @@ const eventTest: CB = (Type, message) => {
     "all",
     {
       start: 1,
-      end: 50,
+      end: 2,
     },
     "./"
   );

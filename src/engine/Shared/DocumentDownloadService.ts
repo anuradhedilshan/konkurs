@@ -2,7 +2,6 @@ import axios, { AxiosInstance } from "axios";
 import fs from "fs/promises";
 import path from "path";
 import { createWriteStream } from "fs";
-import { Readable } from "stream";
 import mime from "mime-types";
 import EventEmitter from "events";
 import Logger from "./Logger";
