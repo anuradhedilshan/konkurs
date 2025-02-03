@@ -12,7 +12,7 @@ export interface DocumentDownloadOptions {
   downloadTimeout?: number;
   downloadPath?: string;
   allowedMimeTypes?: string[];
-  maxRetries?: number; // Added missing option
+  maxRetries?: number;
 }
 
 export interface DownloadRequest {
@@ -56,6 +56,7 @@ export class DownloadQueue extends EventEmitter {
     new Map();
   private completed: Set<string> = new Set();
   private maxRetries: number;
+  private activeDownloads: number = 0;
 
   constructor(maxRetries: number = 3) {
     super();
@@ -73,11 +74,14 @@ export class DownloadQueue extends EventEmitter {
 
   markAsProcessing(id: string): void {
     this.processing.add(id);
+    this.activeDownloads++;
   }
 
   markAsCompleted(id: string): void {
     this.processing.delete(id);
     this.completed.add(id);
+    this.activeDownloads--;
+    this.emit("downloadComplete");
   }
 
   addFailedItem(id: string, url: string, error: string): void {
@@ -91,6 +95,8 @@ export class DownloadQueue extends EventEmitter {
       this.failed.set(id, failedItem);
     }
     this.processing.delete(id);
+    this.activeDownloads--;
+    this.emit("downloadComplete");
   }
 
   getFailedItems(): {
@@ -126,6 +132,10 @@ export class DownloadQueue extends EventEmitter {
   getQueueLength(): number {
     return this.queue.length;
   }
+
+  getActiveDownloads(): number {
+    return this.activeDownloads;
+  }
 }
 
 export class DocumentDownloadService {
@@ -136,6 +146,7 @@ export class DocumentDownloadService {
   private isProcessing: boolean = false;
   private maxConcurrentDownloads: number;
   private logger: Logger | null;
+  private readonly MAX_REQUEST_SIZE = 50 * 1024 * 1024; // 50MB in bytes
 
   constructor(
     {
@@ -153,8 +164,8 @@ export class DocumentDownloadService {
     this.axiosInstance = axios.create({
       timeout: downloadTimeout,
       responseType: "stream",
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
+      maxContentLength: this.MAX_REQUEST_SIZE,
+      maxBodyLength: this.MAX_REQUEST_SIZE,
       validateStatus: (status) => status >= 200 && status < 400,
     });
 
@@ -169,6 +180,14 @@ export class DocumentDownloadService {
       }
     });
 
+    this.downloadQueue.on("downloadComplete", () => {
+      if (
+        this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads
+      ) {
+        this.processQueue();
+      }
+    });
+
     this.ensureDownloadDirectory();
   }
 
@@ -178,7 +197,7 @@ export class DocumentDownloadService {
       this.logger?.log(`Download directory created: ${this.downloadPath}`);
     } catch (error) {
       this.logger?.error(`Failed to create download directory: ${error}`);
-      throw error; // Propagate the error since this is a critical initialization step
+      throw error;
     }
   }
 
@@ -211,42 +230,33 @@ export class DocumentDownloadService {
     if (this.isProcessing) return;
 
     this.isProcessing = true;
-    this.logger?.log("Starting queue processing");
+    this.logger?.log("Processing queue");
 
     try {
-      while (this.downloadQueue.isProcessing()) {
-        const concurrentDownloads: Promise<void>[] = [];
-
-        while (
-          concurrentDownloads.length < this.maxConcurrentDownloads &&
-          this.downloadQueue.getQueueLength() > 0
-        ) {
-          const request = this.downloadQueue.getNext();
-          if (request) {
-            const downloadPromise = this.processSingleDownload(request);
-            concurrentDownloads.push(downloadPromise);
-          }
-        }
-
-        if (concurrentDownloads.length > 0) {
-          await Promise.all(concurrentDownloads);
-          const stats = this.downloadQueue.getStats();
-          this.logger?.log(
-            `Batch complete - Successfully downloaded: ${stats.completed}, ` +
-              `Failed: ${stats.failed}, Remaining in queue: ${stats.queued}`
-          );
+      while (
+        this.downloadQueue.getQueueLength() > 0 &&
+        this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads
+      ) {
+        const request = this.downloadQueue.getNext();
+        if (request) {
+          // Don't await here - we want to process downloads concurrently
+          this.processSingleDownload(request).catch((error) => {
+            this.logger?.error(`Unhandled error in download: ${error}`);
+          });
         }
       }
-
-      const finalStats = this.downloadQueue.getStats();
-      this.logger?.log(
-        `Download session complete - Total processed: ${finalStats.total}, ` +
-          `Successfully downloaded: ${finalStats.completed}, Failed: ${finalStats.failed}`
-      );
     } catch (error) {
       this.logger?.error(`Error processing queue: ${error}`);
     } finally {
       this.isProcessing = false;
+
+      // Check if we need to continue processing
+      if (
+        this.downloadQueue.getQueueLength() > 0 &&
+        this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads
+      ) {
+        setImmediate(() => this.processQueue());
+      }
     }
   }
 
@@ -276,8 +286,19 @@ export class DocumentDownloadService {
       const filePath = path.join(this.downloadPath, fileName);
 
       await new Promise<void>((resolve, reject) => {
+        let totalSize = 0;
         const writer = createWriteStream(filePath);
-        (response.data as Readable).pipe(writer);
+
+        response.data.on("data", (chunk: Buffer) => {
+          totalSize += chunk.length;
+          if (totalSize > this.MAX_REQUEST_SIZE) {
+            response.data.destroy();
+            writer.destroy();
+            reject(new Error("File size exceeded maximum allowed size"));
+          }
+        });
+
+        response.data.pipe(writer);
 
         writer.on("finish", () => {
           this.downloadQueue.markAsCompleted(request.id);
@@ -289,6 +310,11 @@ export class DocumentDownloadService {
 
         writer.on("error", (error) => {
           fs.unlink(filePath).catch(() => {});
+          reject(error);
+        });
+
+        response.data.on("error", (error: Error) => {
+          writer.destroy();
           reject(error);
         });
       });
@@ -315,8 +341,8 @@ export class DocumentDownloadService {
     return this.downloadQueue.getStats();
   }
 
-  ISProcessing(): boolean {
-    return this.isProcessing;
+  IsProcessing(): boolean {
+    return this.isProcessing || this.downloadQueue.getActiveDownloads() > 0;
   }
 }
 

@@ -58268,6 +58268,7 @@ class DownloadQueue extends EventEmitter$2 {
     __publicField(this, "failed", /* @__PURE__ */ new Map());
     __publicField(this, "completed", /* @__PURE__ */ new Set());
     __publicField(this, "maxRetries");
+    __publicField(this, "activeDownloads", 0);
     this.maxRetries = maxRetries;
   }
   addToQueue(request2) {
@@ -58279,10 +58280,13 @@ class DownloadQueue extends EventEmitter$2 {
   }
   markAsProcessing(id) {
     this.processing.add(id);
+    this.activeDownloads++;
   }
   markAsCompleted(id) {
     this.processing.delete(id);
     this.completed.add(id);
+    this.activeDownloads--;
+    this.emit("downloadComplete");
   }
   addFailedItem(id, url2, error) {
     const failedItem = this.failed.get(id) || { url: url2, error, retries: 0 };
@@ -58294,6 +58298,8 @@ class DownloadQueue extends EventEmitter$2 {
       this.failed.set(id, failedItem);
     }
     this.processing.delete(id);
+    this.activeDownloads--;
+    this.emit("downloadComplete");
   }
   getFailedItems() {
     return Array.from(this.failed.entries()).map(([id, item]) => ({
@@ -58316,8 +58322,12 @@ class DownloadQueue extends EventEmitter$2 {
   getQueueLength() {
     return this.queue.length;
   }
+  getActiveDownloads() {
+    return this.activeDownloads;
+  }
 }
 class DocumentDownloadService {
+  // 50MB in bytes
   constructor({
     maxConcurrentDownloads = 10,
     downloadTimeout = 5e3,
@@ -58332,14 +58342,15 @@ class DocumentDownloadService {
     __publicField(this, "isProcessing", false);
     __publicField(this, "maxConcurrentDownloads");
     __publicField(this, "logger");
+    __publicField(this, "MAX_REQUEST_SIZE", 50 * 1024 * 1024);
     var _a3;
     this.logger = logger2;
     (_a3 = this.logger) == null ? void 0 : _a3.log("Initializing DocumentDownloadService");
     this.axiosInstance = axios.create({
       timeout: downloadTimeout,
       responseType: "stream",
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
+      maxContentLength: this.MAX_REQUEST_SIZE,
+      maxBodyLength: this.MAX_REQUEST_SIZE,
       validateStatus: (status) => status >= 200 && status < 400
     });
     this.downloadPath = downloadPath;
@@ -58348,6 +58359,11 @@ class DocumentDownloadService {
     this.downloadQueue = new DownloadQueue(maxRetries);
     this.downloadQueue.on("itemAdded", () => {
       if (!this.isProcessing) {
+        this.processQueue();
+      }
+    });
+    this.downloadQueue.on("downloadComplete", () => {
+      if (this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads) {
         this.processQueue();
       }
     });
@@ -58384,36 +58400,27 @@ class DocumentDownloadService {
     );
   }
   async processQueue() {
-    var _a3, _b, _c, _d;
+    var _a3, _b;
     if (this.isProcessing) return;
     this.isProcessing = true;
-    (_a3 = this.logger) == null ? void 0 : _a3.log("Starting queue processing");
+    (_a3 = this.logger) == null ? void 0 : _a3.log("Processing queue");
     try {
-      while (this.downloadQueue.isProcessing()) {
-        const concurrentDownloads = [];
-        while (concurrentDownloads.length < this.maxConcurrentDownloads && this.downloadQueue.getQueueLength() > 0) {
-          const request2 = this.downloadQueue.getNext();
-          if (request2) {
-            const downloadPromise = this.processSingleDownload(request2);
-            concurrentDownloads.push(downloadPromise);
-          }
-        }
-        if (concurrentDownloads.length > 0) {
-          await Promise.all(concurrentDownloads);
-          const stats = this.downloadQueue.getStats();
-          (_b = this.logger) == null ? void 0 : _b.log(
-            `Batch complete - Successfully downloaded: ${stats.completed}, Failed: ${stats.failed}, Remaining in queue: ${stats.queued}`
-          );
+      while (this.downloadQueue.getQueueLength() > 0 && this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads) {
+        const request2 = this.downloadQueue.getNext();
+        if (request2) {
+          this.processSingleDownload(request2).catch((error) => {
+            var _a4;
+            (_a4 = this.logger) == null ? void 0 : _a4.error(`Unhandled error in download: ${error}`);
+          });
         }
       }
-      const finalStats = this.downloadQueue.getStats();
-      (_c = this.logger) == null ? void 0 : _c.log(
-        `Download session complete - Total processed: ${finalStats.total}, Successfully downloaded: ${finalStats.completed}, Failed: ${finalStats.failed}`
-      );
     } catch (error) {
-      (_d = this.logger) == null ? void 0 : _d.error(`Error processing queue: ${error}`);
+      (_b = this.logger) == null ? void 0 : _b.error(`Error processing queue: ${error}`);
     } finally {
       this.isProcessing = false;
+      if (this.downloadQueue.getQueueLength() > 0 && this.downloadQueue.getActiveDownloads() < this.maxConcurrentDownloads) {
+        setImmediate(() => this.processQueue());
+      }
     }
   }
   async processSingleDownload(request2) {
@@ -58435,7 +58442,16 @@ class DocumentDownloadService {
       const fileName = this.generateFileName(request2.id, contentType);
       const filePath = path$1.join(this.downloadPath, fileName);
       await new Promise((resolve, reject) => {
+        let totalSize = 0;
         const writer = createWriteStream(filePath);
+        response2.data.on("data", (chunk) => {
+          totalSize += chunk.length;
+          if (totalSize > this.MAX_REQUEST_SIZE) {
+            response2.data.destroy();
+            writer.destroy();
+            reject(new Error("File size exceeded maximum allowed size"));
+          }
+        });
         response2.data.pipe(writer);
         writer.on("finish", () => {
           var _a4;
@@ -58448,6 +58464,10 @@ class DocumentDownloadService {
         writer.on("error", (error) => {
           fs$1.unlink(filePath).catch(() => {
           });
+          reject(error);
+        });
+        response2.data.on("error", (error) => {
+          writer.destroy();
           reject(error);
         });
       });
@@ -58465,8 +58485,8 @@ class DocumentDownloadService {
   getQueueStats() {
     return this.downloadQueue.getStats();
   }
-  ISProcessing() {
-    return this.isProcessing;
+  IsProcessing() {
+    return this.isProcessing || this.downloadQueue.getActiveDownloads() > 0;
   }
 }
 class Logger {
@@ -58957,7 +58977,8 @@ async function start(url2, type, range, location) {
   let downloadService = null;
   if (DocumentData.data) {
     const { maxpages, title } = parseHomePageRight(DocumentData.data);
-    const Writer = new CSVWriter(location, title, logger$1);
+    const time = /* @__PURE__ */ new Date();
+    const Writer = new CSVWriter(location, `${title}_${time}`, logger$1);
     fireEvent$1("count", `Found ${maxpages} pages on ${title}`);
     if (maxpages == null) {
       logger$1 == null ? void 0 : logger$1.error("Error in parseHomePageRight");

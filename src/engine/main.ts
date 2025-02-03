@@ -105,7 +105,8 @@ export default async function start(
   let downloadService = null;
   if (DocumentData.data) {
     const { maxpages, title } = parseHomePageRight(DocumentData.data);
-    const Writer = new CSVWriter(location, title, logger);
+    const time = new Date();
+    const Writer = new CSVWriter(location, `${title}_${time}`, logger);
     fireEvent("count", `Found ${maxpages} pages on ${title}`);
     if (maxpages == null) {
       logger?.error("Error in parseHomePageRight");
@@ -204,6 +205,9 @@ export default async function start(
       }
     }
   }
+
+  console.log("DOwnlod COmplete ************************");
+  
 
   logger?.warn("Download complete");
   fireEvent("complete", true);
