@@ -152,10 +152,10 @@ export class DocumentDownloadService {
   constructor(
     {
       maxConcurrentDownloads = 10,
-      downloadTimeout = 5000,
+      downloadTimeout = 10000,
       downloadPath = path.resolve("./downloads"),
       allowedMimeTypes = SUPPORTED_DOCUMENT_TYPES,
-      maxRetries = 1,
+      maxRetries = 3,
     }: DocumentDownloadOptions = {},
     logger: Logger | null = null
   ) {

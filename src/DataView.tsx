@@ -1,8 +1,11 @@
 import LogTerminal from "./Logger_view";
 import { ActionType, useStore } from "./store/app.store";
 
+const h = "hello";
+console.log(h);
+
 const Start = () => {
-  const { state ,dispatch } = useStore();
+  const { state, dispatch } = useStore();
   console.log("STart Button render");
 
   return (
@@ -23,14 +26,14 @@ const Start = () => {
               state.type,
               state.location,
               state.range,
-              state.link
+              state.link,
             );
             dispatch({ type: ActionType.SET_STATUS, payload: "running" });
           } else {
             if (window.MyApi.OnEvent)
               window.MyApi.OnEvent(
                 "error",
-                "The process is currently running or no link is provided.  "
+                "The process is currently running or no link is provided.  ",
               );
             console.log("Already started or no link");
           }
